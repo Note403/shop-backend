@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\User\UserCreateRequest;
+use App\Http\Requests\User\UserPostRequest;
+use App\Models\Address;
 use App\Models\User;
 use App\Service\Response;
 use Exception;
@@ -17,7 +18,7 @@ class UserController extends Controller
         return Response::json(User::all());
     }
 
-    public function create(UserCreateRequest $request): JsonResponse
+    public function create(UserPostRequest $request): JsonResponse
     {
         $data = $request->validated();
 
@@ -33,15 +34,49 @@ class UserController extends Controller
             return Response::error('user_create');
         }
 
-        return Response::json(User::find($user_id));
+        try {
+            $address_id = Address::query()->create([
+                Address::COUNTRY => $data[Address::COUNTRY],
+                Address::CITY => $data[Address::CITY],
+                Address::STREET => $data[Address::STREET],
+                Address::ZIP => $data[Address::ZIP],
+                Address::HOUSE_NUMBER => $data[Address::HOUSE_NUMBER],
+                Address::USER_ID => $user_id
+            ]);
+        } catch (Exception $e) {
+            User::query()
+                ->where(User::ID, $user_id)
+                ->limit(1)->delete();
+
+            return Response::error('user_create');
+        }
+
+        return Response::json([
+            User::find($user_id),
+            Address::find($address_id)
+        ]);
+    }
+
+    public function createPwResetRequest(Request $request): JsonResponse
+    {
+
     }
 
     public function delete(Request $request, string $user_id): JsonResponse
     {
-        $delete_response = User::query()->where(User::ID, $user_id)->limit(1)->delete();
+        $delete_response = User::query()
+            ->where(User::ID, $user_id)
+            ->limit(1)->delete();
 
         if (!$delete_response)
-            return Response::success('user_delete');
+            return Response::error('user_delete');
+
+        $delete_response = Address::query()
+            ->where(Address::USER_ID, $user_id)
+            ->limit(1)->delete();
+
+        if (!$delete_response)
+            return Response::error('user_delete');
 
         return Response::success();
     }
