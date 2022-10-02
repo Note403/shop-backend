@@ -13,14 +13,11 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('address', function (Blueprint $table) {
+        Schema::create('change_request', function (Blueprint $table) {
             $table->id();
-            $table->string('country');
-            $table->string('city');
-            $table->string('street');
-            $table->string('zip');
-            $table->string('house_number');
             $table->foreignUuid('user_id')->references('id')->on('user');
+            $table->string('token');
+            $table->enum('type', ['ADDR', 'PW', 'MAIL']);
             $table->timestamps();
         });
     }
@@ -32,6 +29,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('address');
+        Schema::dropIfExists('change_request');
     }
 };

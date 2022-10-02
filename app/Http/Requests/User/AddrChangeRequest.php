@@ -3,19 +3,20 @@
 namespace App\Http\Requests\User;
 
 use App\Models\Address;
-use App\Models\User;
+use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
 
-class UserPostRequest extends FormRequest
+class AddrChangeRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      *
      * @return bool
      */
-    public function authorize()
+    public function authorize(): bool
     {
-        return false;
+        return (Auth::user() != null);
     }
 
     /**
@@ -26,14 +27,10 @@ class UserPostRequest extends FormRequest
     public function rules()
     {
         return [
-            User::NAME => 'required|String',
-            User::EMAIL => 'required|email',
-            User::PASSWORD => 'required|String',
-            User::ROLE => 'required|String',
             Address::COUNTRY => 'required|String',
             Address::CITY => 'required|String',
             Address::ZIP => 'required|String',
-            Address::HOUSE_NUMBER => 'required|numeric',
+            Address::HOUSE_NUMBER => 'required|String'
         ];
     }
 }

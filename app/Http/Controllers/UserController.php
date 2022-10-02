@@ -2,13 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\User\AddrChangeRequest;
+use App\Http\Requests\User\PwChangeRequest;
 use App\Http\Requests\User\UserPostRequest;
 use App\Models\Address;
+use App\Models\ChangeRequest;
+use App\Models\TmpAddress;
 use App\Models\User;
+use App\Service\RequestCreator;
 use App\Service\Response;
 use Exception;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\Client\ResponseSequence;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class UserController extends Controller
@@ -57,9 +65,88 @@ class UserController extends Controller
         ]);
     }
 
-    public function createPwResetRequest(Request $request): JsonResponse
+    public function requestAddressChange(AddrChangeRequest $request): JsonResponse
     {
+        if (!$request->authorize())
+            return Response::error('unauthorized');
 
+        $data = $request->validated();
+
+        $change_request = RequestCreator::changeAddr($data);
+
+        if ($change_request === false)
+            return Response::error();
+
+        // TODO: SEND CHANGE MAIL
+
+        return Response::success();
+    }
+
+    public function processAddrChange(Request $request): JsonResponse
+    {
+        $change_request = ChangeRequest::query()
+            ->where(ChangeRequest::TOKEN, $request->input('t'))
+            ->get()->first();
+
+        if ($change_request == null)
+            return Response::error();
+
+        $tmp_data = TmpAddress::query()
+            ->where(TmpAddress::USER_ID, $change_request->user_id)
+            ->get()->first();
+
+        if ($tmp_data == null)
+            return Response::error();
+
+        try {
+            Address::query()
+                ->where(Address::USER_ID, $change_request->user_id)
+                ->update([
+                    Address::COUNTRY => $tmp_data->country,
+                    Address::CITY => $tmp_data->city,
+                    Address::STREET => $tmp_data->street,
+                    Address::ZIP => $tmp_data->zip,
+                    Address::HOUSE_NUMBER => $tmp_data->house_number,
+                ]);
+        } catch (Exception $e) {
+            return Response::error();
+        }
+
+        TmpAddress::query()
+            ->where(TmpAddress::ID, $tmp_data->id)
+            ->limit(1)->delete();
+
+        return Response::success();
+    }
+
+    public function requestPwChange(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+
+        if ($user == null)
+            return Response::error();
+
+        $change_request = RequestCreator::changePw();
+
+        // TODO: SEND MAIL
+
+        return Response::success();
+    }
+
+    public function processPwChange(PwChangeRequest $request): JsonResponse
+    {
+        if (!$request->authorize())
+            return Response::error();
+
+        $data = $request->validated();
+
+        try {
+
+        } catch (Exception $e) {
+            return Response::error('pw_change');
+        }
+
+        return Response::success();
     }
 
     public function delete(Request $request, string $user_id): JsonResponse
@@ -83,25 +170,85 @@ class UserController extends Controller
 
     public function getById(Request $request, string $user_id): JsonResponse
     {
-        return Response::json(User::find($user_id));
+        if (!$this->wAddrData($request))
+            return Response::json(User::find($user_id));
+
+        return Response::json($this->mergeUserAddr($user_id));
     }
 
     public function getByRole(Request $request, string $role): JsonResponse
     {
-        return Response::json(User::query()->where(User::ROLE, $role)->get());
+        $users = User::query()->where(User::ROLE, $role)->get();
+
+        if (!$this->wAddrData($request))
+            return Response::json($users);
+
+        $response = new Collection();
+
+        foreach ($users as $user) {
+            $response[] = $this->mergeUserAddr($user->id);
+        }
+
+        return Response::json($response);
     }
 
     public function getBlocked(Request $request): JsonResponse
     {
-        return Response::json(User::query()->where(User::BLOCKED, true)->get());
+        if ($this->wAddrData($request))
+            return Response::json(User::query()->where(User::BLOCKED, true)->get());
+
+        $users = User::query()
+            ->where(User::BLOCKED, true)
+            ->get();
+
+        $response = new Collection();
+
+        foreach ($users as $user) {
+            $response[] = $this->mergeUserAddr($user->id);
+        }
+
+        return Response::json($response);
     }
 
     public function getCreatedInTime(Request $request, string $start_date, string $end_date): JsonResponse
     {
-        return Response::json(
-            User::query()
-                ->whereBetween(User::CREATED_AT, [$start_date, $end_date])
-                ->get()
-        );
+        if ($this->wAddrData($request))
+            return Response::json(
+                User::query()
+                    ->whereBetween(User::CREATED_AT, [$start_date, $end_date])
+                    ->get()
+            );
+
+        $users = User::query()
+            ->whereBetween(User::CREATED_AT, [$start_date, $end_date])
+            ->get();
+
+        $response = new Collection();
+
+        foreach ($users as $user) {
+            $response[] = $this->mergeUserAddr($user->id);
+        }
+
+        return Response::json($response);
+    }
+
+    private function wAddrData($request): bool
+    {
+        return ($request->has('address_data') && !!$request->input('address_data'));
+    }
+
+    private function mergeUserAddr(string $user_id): array
+    {
+        $user = User::find($user_id)->getAttributes();
+        $address = Address::query()
+            ->where(Address::USER_ID, $user['id'])
+            ->get()->first()->getAttributes();
+
+        $address['addr_id'] = $address['id'];
+
+        unset($address['id']);
+        unset($address['user_id']);
+
+        return $user + $address;
     }
 }

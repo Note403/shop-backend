@@ -16,7 +16,7 @@ class Response
         ]);
     }
 
-    public static function error(string $error_code): JsonResponse
+    public static function error(string $error_code = 'default'): JsonResponse
     {
         return response()->json([
             'success' => true,

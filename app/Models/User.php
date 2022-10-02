@@ -31,6 +31,7 @@ class User extends Authenticatable
         self::ROLE,
         self::VERIFIED,
         self::BLOCKED,
+        self::DELETED_AT,
         self::CREATED_AT,
         self::UPDATED_AT
     ];
