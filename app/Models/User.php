@@ -48,4 +48,9 @@ class User extends Authenticatable
 
         return hash('sha512', $password . $salt) . '$' . $salt;
     }
+
+    public static function hash(string $password, string $salt): string
+    {
+        return hash('sha512', $password . $salt);
+    }
 }

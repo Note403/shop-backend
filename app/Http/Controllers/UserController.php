@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\User\AddrChangeRequest;
+use App\Http\Requests\User\LoginRequest;
 use App\Http\Requests\User\PwChangeRequest;
 use App\Http\Requests\User\UserPostRequest;
 use App\Models\Address;
@@ -43,7 +44,7 @@ class UserController extends Controller
         }
 
         try {
-            $address_id = Address::query()->create([
+            Address::query()->create([
                 Address::COUNTRY => $data[Address::COUNTRY],
                 Address::CITY => $data[Address::CITY],
                 Address::STREET => $data[Address::STREET],
@@ -59,10 +60,7 @@ class UserController extends Controller
             return Response::error('user_create');
         }
 
-        return Response::json([
-            User::find($user_id),
-            Address::find($address_id)
-        ]);
+        return Response::json($this->mergeUserAddr($user_id));
     }
 
     public function requestAddressChange(AddrChangeRequest $request): JsonResponse
@@ -140,8 +138,28 @@ class UserController extends Controller
 
         $data = $request->validated();
 
-        try {
+        if (!isset($data['t']))
+            return Response::error();
 
+        if ($data['old_pw'] == $data['new_pw'])
+            return Response::error('old_new_pw_same');
+
+        if ($data['new_pw'] != $data['new_pw_repeat'])
+            return Response::error('new_pw_repeat');
+
+        $change_request = ChangeRequest::query()
+            ->where(ChangeRequest::TOKEN, $data['t'])
+            ->get()->first();
+
+        if ($change_request == null)
+            return Response::error();
+
+        try {
+            User::query()
+                ->where(User::ID, $change_request->user_id)
+                ->update([
+                    User::PASSWORD => User::hashPassword($data['new_pw'])
+                ]);
         } catch (Exception $e) {
             return Response::error('pw_change');
         }
@@ -183,58 +201,90 @@ class UserController extends Controller
         if (!$this->wAddrData($request))
             return Response::json($users);
 
-        $response = new Collection();
-
-        foreach ($users as $user) {
-            $response[] = $this->mergeUserAddr($user->id);
-        }
-
-        return Response::json($response);
+        return Response::json($this->responseFromUsers($users));
     }
 
     public function getBlocked(Request $request): JsonResponse
     {
-        if ($this->wAddrData($request))
-            return Response::json(User::query()->where(User::BLOCKED, true)->get());
-
         $users = User::query()
             ->where(User::BLOCKED, true)
             ->get();
 
-        $response = new Collection();
+        if ($this->wAddrData($request))
+            return Response::json($users);
 
-        foreach ($users as $user) {
-            $response[] = $this->mergeUserAddr($user->id);
-        }
-
-        return Response::json($response);
+        return Response::json($this->responseFromUsers($users));
     }
 
     public function getCreatedInTime(Request $request, string $start_date, string $end_date): JsonResponse
     {
-        if ($this->wAddrData($request))
-            return Response::json(
-                User::query()
-                    ->whereBetween(User::CREATED_AT, [$start_date, $end_date])
-                    ->get()
-            );
-
         $users = User::query()
             ->whereBetween(User::CREATED_AT, [$start_date, $end_date])
             ->get();
 
-        $response = new Collection();
+        if ($this->wAddrData($request))
+            return Response::json($users);
 
-        foreach ($users as $user) {
-            $response[] = $this->mergeUserAddr($user->id);
-        }
+        return Response::json($this->responseFromUsers($users));
+    }
 
-        return Response::json($response);
+    public function login(LoginRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        $user = User::query()
+            ->where(User::EMAIL, $data['user'])
+            ->get()->first();
+
+        if ($user == null)
+            return Response::error('login');
+
+        $pw_parts = explode('$', $user->password);
+
+        $input_hash = User::hash($data['password'], $pw_parts[1]);
+
+        if ($input_hash != $pw_parts[0])
+            return Response::error('login');
+
+        Auth::login($user);
+
+        return Response::success();
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        if (Auth::user() == null)
+            return Response::error();
+
+        Auth::logout();
+
+        return Response::success();
+    }
+
+    public function me(): JsonResponse
+    {
+        $user = Auth::user();
+
+        if ($user == null)
+            return Response::error();
+
+        return Response::json($user->getAttributes());
     }
 
     private function wAddrData($request): bool
     {
         return ($request->has('address_data') && !!$request->input('address_data'));
+    }
+
+    private function responseFromUsers(array|Collection $users): Collection
+    {
+        $response = array();
+
+        foreach ($users as $user) {
+            $response[] = $this->mergeUserAddr($user['id']);
+        }
+
+        return new Collection($response);
     }
 
     private function mergeUserAddr(string $user_id): array
