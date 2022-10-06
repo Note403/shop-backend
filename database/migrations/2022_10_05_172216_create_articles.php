@@ -13,15 +13,14 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('users', function (Blueprint $table) {
+        Schema::create('articles', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('name');
-            $table->string('email');
-            $table->string('password');
-            $table->enum('role', ['guest', 'user', 'moderator', 'admin']);
-            $table->boolean('verified')->default(0);
-            $table->boolean('blocked')->default(0);
-            $table->softDeletes();
+            $table->string('title');
+            $table->string('description');
+            $table->string('category_key');
+            $table->foreign('category_key')->references('key')->on('article_categories');
+            $table->float('price');
+            $table->float('vat_percent');
             $table->timestamps();
         });
     }
@@ -33,6 +32,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('user');
+        Schema::dropIfExists('articles');
     }
 };

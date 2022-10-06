@@ -32,7 +32,7 @@ class UserController extends Controller
         $data = $request->validated();
 
         try {
-            $user_id = User::query()->create([
+            $user_id = User::create([
                 User::ID => Str::uuid(),
                 User::NAME => $data[User::NAME],
                 User::EMAIL => $data[User::EMAIL],
@@ -44,7 +44,7 @@ class UserController extends Controller
         }
 
         try {
-            Address::query()->create([
+            Address::create([
                 Address::COUNTRY => $data[Address::COUNTRY],
                 Address::CITY => $data[Address::CITY],
                 Address::STREET => $data[Address::STREET],

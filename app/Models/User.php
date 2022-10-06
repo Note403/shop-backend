@@ -40,7 +40,7 @@ class User extends Authenticatable
         self::PASSWORD
     ];
 
-    protected $table = 'user';
+    protected $table = 'users';
 
     public static function hashPassword(string $password): string
     {

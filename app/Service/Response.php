@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 
 class Response
@@ -25,12 +26,12 @@ class Response
         ]);
     }
 
-    public static function json(Collection|array $data): JsonResponse
+    public static function json(Collection|array|Model $data): JsonResponse
     {
         return response()->json([
             'success' => true,
             'error' => false,
-            'data' => $data
+            'data' => $data instanceof Model ? $data->getAttributes() : $data,
         ]);
     }
 }
