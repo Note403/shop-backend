@@ -11,7 +11,7 @@ class Order extends Model
 
     public const ID = 'id';
     public const PRICE = 'price';
-    public const STATUS = 'STATUS';
+    public const STATUS = 'status';
     public const PAYED = 'payed';
     public const CREATED_AT = 'created_at';
     public const UPDATED_AT = 'updated_at';
